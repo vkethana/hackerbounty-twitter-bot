@@ -1,17 +1,44 @@
 import requests
 from bs4 import BeautifulSoup
-from tweepy_test import send_tweet
 import json
+import tweepy
+import os
 import sys
 
-# Open up bounties.json file and read the contents
-with open('bounties.json', 'r') as f:
-  existing_bounties = json.load(f)
+if not os.path.exists('secrets.json'):
+  print("ERROR: You need to create a file called secrets.json containing your Twitter API key information (the file should have four variables; see below)")
+  sys.exit()
+
+with open('secrets.json', 'r') as f:
+  secrets = json.load(f)
+
+def write_tweet(tweet):
+  # Only perform authentication if we need to; sometimes we might run the script 
+  # but then nothing new has happened so we just exit out without needing to make
+  # API calls
+
+  consumer_key = secrets['consumer_key']
+  consumer_secret = secrets['consumer_secret']
+  access_token = secrets['access_token']
+  access_token_secret = secrets['access_token_secret']
+
+  client = tweepy.Client(
+      consumer_key=consumer_key, consumer_secret=consumer_secret,
+      access_token=access_token, access_token_secret=access_token_secret
+  )
+  client.create_tweet(tweet)
+
+existing_bounties = set()
+if os.path.exists('bounties.json'):
+  # Open up bounties.json file and read the contents
+  with open('bounties.json', 'r') as f:
+    existing_bounties = json.load(f)
 
 print("Existing bounties: ", existing_bounties)
 existing_bounties = set(existing_bounties)
 
 # Function to extract bounties
+# Source: ChatGPT
 def extract_bounties(url):
     # Send a GET request to the URL
     response = requests.get(url)
@@ -68,15 +95,25 @@ bounties = extract_bounties(url)
 # Print the extracted bounties
 if bounties:
     for bounty in bounties:
+        ''' This commented-out code might be useful for debugging
         print("Title:", bounty['title'])
         print("Description:", bounty['description'])
         print("Status:", bounty['status'])
         print("Reward:", bounty['reward'])
         print("URL:", url+bounty['more_url'])
         print("-" * 50)
+        '''
+        text = "Attention all aspiring computer hackers: a new {bounty['status']} listing has been posted on BountyList!\n"
+        text += f"Title: {bounty['title']}\n"
+        text += f"Description: {bounty['description']}\n"
+        text += f"Time Left: {bounty['status']}"
+
+        text = text[0:240]  # prevent accidentally exceeding character limit
+        print(text)
 
     # Save list of bounty names into a json file
     # Dump JUST the title attributes
+    # This prevents the bot from printing out the same bounty multiple times
     with open('bounties.json', 'w') as f:
       for i in bounties:
         existing_bounties.add(i['title'])
