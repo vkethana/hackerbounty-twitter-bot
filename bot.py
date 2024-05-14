@@ -5,46 +5,11 @@ import tweepy
 import os
 import sys
 
-# Load OS environment variables
-secrets = {}
-# Check if environmennt variable CONSUMER_KEY exists
-try:
-  secrets['consumer_key'] = os.environ['consumer_key']
-  secrets['consumer_secret'] = os.environ['consumer_secret']
-  secrets['access_token'] = os.environ['access_token']
-  secrets['access_token_secret'] = os.environ['access_token_secret']
-  secrets['bearer_token']=os.environ['bearer_token']
-  print(secrets)
-except Exception as E:
-  print("Error loading environment variables: ", E)
-  print("Please make sure you have set your consumer_key, consumer_secret, access_token, access_token_secret, and bearer_token environment variables.")
-  sys.exit()
-
-def write_tweet(tweet):
-  # Only perform authentication if we need to; sometimes we might run the script 
-  # but then nothing new has happened so we just exit out without needing to make
-  # API calls
-  client = tweepy.Client(
-      consumer_key = secrets['consumer_key'],
-      consumer_secret = secrets['consumer_secret'],
-      access_token = secrets['access_token'],
-      access_token_secret = secrets['access_token_secret'],
-      bearer_token=secrets['bearer_token']
-  )
-  client.create_tweet(text=tweet)
-
-existing_bounties = set()
-if os.path.exists('existing_bounties.json'):
-  # Open up existing_bounties.json file and read the contents
-  with open('existing_bounties.json', 'r') as f:
-    existing_bounties = json.load(f)
-
-print("Existing bounties: ", existing_bounties)
-existing_bounties = set(existing_bounties)
-
 # Function to extract bounties
 # Source: ChatGPT
-def extract_bounties(url):
+# TODO: Make the function less dependent on the exact CSS structure of the
+# website
+def extract_bounties(url, existing_bounties):
     # Send a GET request to the URL
     response = requests.get(url)
     # Check if the request was successful (status code 200)
@@ -84,48 +49,82 @@ def extract_bounties(url):
         print("Failed to retrieve the webpage.")
         return None
 
+def update_bot(request):
+  # Load OS environment variables
+  secrets = {}
+  # Check if environmennt variable CONSUMER_KEY exists
+  try:
+    secrets['consumer_key'] = os.environ['consumer_key']
+    secrets['consumer_secret'] = os.environ['consumer_secret']
+    secrets['access_token'] = os.environ['access_token']
+    secrets['access_token_secret'] = os.environ['access_token_secret']
+    secrets['bearer_token']=os.environ['bearer_token']
+  except Exception as E:
+    print("Error loading environment variables: ", E)
+    print("Please make sure you have set your consumer_key, consumer_secret, access_token, access_token_secret, and bearer_token environment variables.")
+    sys.exit()
+
+  client = tweepy.Client(
+      consumer_key = secrets['consumer_key'],
+      consumer_secret = secrets['consumer_secret'],
+      access_token = secrets['access_token'],
+      access_token_secret = secrets['access_token_secret'],
+      bearer_token=secrets['bearer_token']
+  )
+  existing_bounties = set()
+  if os.path.exists('existing_bounties.json'):
+    # Open up existing_bounties.json file and read the contents
+    with open('existing_bounties.json', 'r') as f:
+      existing_bounties = json.load(f)
+
+  print("Existing bounties: ", existing_bounties)
+  existing_bounties = set(existing_bounties)
+
 # URL of the website containing bounties
-url = "https://bountylist.org"  # Replace 'URL_OF_THE_WEBSITE' with the actual URL
+  url = "https://bountylist.org"  # Replace 'URL_OF_THE_WEBSITE' with the actual URL
 
 # Extract bounties from the URL
-bounties = extract_bounties(url)
+  bounties = extract_bounties(url, existing_bounties)
 
 # Print the extracted bounties
-if bounties:
-    for bounty in bounties:
-        ''' This commented-out code might be useful for debugging
-        print("Title:", bounty['title'])
-        print("Description:", bounty['description'])
-        print("Status:", bounty['status'])
-        print("Reward:", bounty['reward'])
-        print("URL:", url+bounty['more_url'])
-        print("-" * 50)
-        '''
+  if bounties:
+      for bounty in bounties:
+          ''' This commented-out code might be useful for debugging
+          print("Title:", bounty['title'])
+          print("Description:", bounty['description'])
+          print("Status:", bounty['status'])
+          print("Reward:", bounty['reward'])
+          print("URL:", url+bounty['more_url'])
+          print("-" * 50)
+          '''
 
-        tweet_text = f"Attention all aspiring computer hackers: a new {bounty['reward']} listing has been posted on BountyList!\n\n"
-        tweet_text += f"Title: {bounty['title']}\n"
-        tweet_text += f"Time Left: {bounty['status']}\n"
-        tweet_text += f"URL: {url+bounty['more_url']}!"
-        # Important formatting quirk: you need an exclamation point because otherwise the link will not appear in the tweet, 
-        # because twitter will try to "merge" it into the link preview that appears below the Tweet
+          tweet_text = f"Attention all aspiring computer hackers: a new {bounty['reward']} listing has been posted on BountyList!\n\n"
+          tweet_text += f"Title: {bounty['title']}\n"
+          tweet_text += f"URL: {url+bounty['more_url']}\n"
+          tweet_text += f"Time Left: {bounty['status']}"
+          # Important formatting quirk: you need an exclamation point because otherwise the link will not appear in the tweet, 
+          # because twitter will try to "merge" it into the link preview that appears below the Tweet
 
-        if len(tweet_text) > 240:
-          tweet_text = tweet_text[0:240]
+          if len(tweet_text) > 240:
+            tweet_text = tweet_text[0:240]
 
-        print("New bounty detected. Sending out the following tweet:")
-        print(tweet_text)
+          print("New bounty detected. Sending out the following tweet:")
+          print(tweet_text)
 
-        try:
-          write_tweet(tweet_text)
-        except Exception as e:
-          print("Error sending tweet: ", e)
+          try:
+            client.create_tweet(text=tweet_text)
+          except Exception as e:
+            print("Error sending tweet: ", e)
 
-    # Save list of bounty names into a json file
-    # Dump JUST the title attributes
-    # This prevents the bot from printing out the same bounty multiple times
-    with open('existing_bounties.json', 'w') as f:
-      for i in bounties:
-        existing_bounties.add(i['title'])
-      json.dump(list(existing_bounties), f)
-else:
-    print("No new bounties found.")
+      # Save list of bounty names into a json file
+      # Dump JUST the title attributes
+      # This prevents the bot from printing out the same bounty multiple times
+      with open('existing_bounties.json', 'w') as f:
+        for i in bounties:
+          existing_bounties.add(i['title'])
+        json.dump(list(existing_bounties), f)
+  else:
+      print("No new bounties found.")
+
+if __name__ == "__main__":
+  update_bot(None) # The "request" parameter is not important
