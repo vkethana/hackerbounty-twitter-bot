@@ -5,12 +5,20 @@ import tweepy
 import os
 import sys
 
-if not os.path.exists('secrets.json'):
-  print("ERROR: You need to create a file called secrets.json containing your Twitter API key information (the file should have four variables; see below)")
+# Load OS environment variables
+secrets = {}
+# Check if environmennt variable CONSUMER_KEY exists
+try:
+  secrets['consumer_key'] = os.environ['consumer_key']
+  secrets['consumer_secret'] = os.environ['consumer_secret']
+  secrets['access_token'] = os.environ['access_token']
+  secrets['access_token_secret'] = os.environ['access_token_secret']
+  secrets['bearer_token']=os.environ['bearer_token']
+  print(secrets)
+except Exception as E:
+  print("Error loading environment variables: ", E)
+  print("Please make sure you have set your consumer_key, consumer_secret, access_token, access_token_secret, and bearer_token environment variables.")
   sys.exit()
-
-with open('secrets.json', 'r') as f:
-  secrets = json.load(f)
 
 def write_tweet(tweet):
   # Only perform authentication if we need to; sometimes we might run the script 
@@ -77,7 +85,7 @@ def extract_bounties(url):
         return None
 
 # URL of the website containing bounties
-url = "https://bountylist.org/"  # Replace 'URL_OF_THE_WEBSITE' with the actual URL
+url = "https://bountylist.org"  # Replace 'URL_OF_THE_WEBSITE' with the actual URL
 
 # Extract bounties from the URL
 bounties = extract_bounties(url)
@@ -93,21 +101,22 @@ if bounties:
         print("URL:", url+bounty['more_url'])
         print("-" * 50)
         '''
-        text = f"Attention all aspiring computer hackers: a new {bounty['reward']} listing has been posted on BountyList!\n\n"
-        text += f"Title: {bounty['title']}\n"
-        text += f"Time Left: {bounty['status']}\n"
-        text += f"URL: {url+bounty['more_url']}!"
 
-        #text = text[0:240]  # prevent accidentally exceeding character limit
-        if len(text) > 240:
-          text = text[0:240]
+        tweet_text = f"Attention all aspiring computer hackers: a new {bounty['reward']} listing has been posted on BountyList!\n\n"
+        tweet_text += f"Title: {bounty['title']}\n"
+        tweet_text += f"Time Left: {bounty['status']}\n"
+        tweet_text += f"URL: {url+bounty['more_url']}!"
+        # Important formatting quirk: you need an exclamation point because otherwise the link will not appear in the tweet, 
+        # because twitter will try to "merge" it into the link preview that appears below the Tweet
+
+        if len(tweet_text) > 240:
+          tweet_text = tweet_text[0:240]
 
         print("New bounty detected. Sending out the following tweet:")
-        print(text)
+        print(tweet_text)
 
         try:
-          write_tweet(text)
-          pass
+          write_tweet(tweet_text)
         except Exception as e:
           print("Error sending tweet: ", e)
 
