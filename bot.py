@@ -4,6 +4,33 @@ import json
 import tweepy
 import os
 import sys
+import firebase_admin
+from firebase_admin import firestore
+
+# We store the already-tweeted bounties in a firebase DB
+# that way, we don't tweet the same bounty multiple times
+# Uses firebase, should be robust enough to handle hundreds of thousands of bounties
+app = firebase_admin.initialize_app()
+collection_name = "bounties1"
+
+def write_string_to_firestore(string):
+    # Create Firestore client
+    db = firestore.client()
+    doc_ref = db.collection(collection_name).document()
+    doc_ref.set({"string": string})
+
+def bounty_already_tweeted(query_string):
+    # Create Firestore client
+    db = firestore.client()
+
+    # Query Firestore for the given string
+    query = db.collection(collection_name).where("string", "==", query_string).get()
+
+    # Check if the string exists in the database
+    if query:
+        return True
+    else:
+        return False
 
 # Function to extract bounties
 # Source: ChatGPT
@@ -23,7 +50,7 @@ def extract_bounties(url, existing_bounties):
         # Extract information for each bounty
         for bounty in bounty_elements:
             title = bounty.find(class_='text-base font-semibold text-gray-800').get_text()
-            if (title in existing_bounties):
+            if bounty_already_tweeted(title):
                 print("Bounty already exists: ", title)
                 continue
 
@@ -62,7 +89,7 @@ def update_bot(request):
   except Exception as E:
     print("Error loading environment variables: ", E)
     print("Please make sure you have set your consumer_key, consumer_secret, access_token, access_token_secret, and bearer_token environment variables.")
-    sys.exit()
+    return "Error loading environment variables."
 
   client = tweepy.Client(
       consumer_key = secrets['consumer_key'],
@@ -72,23 +99,24 @@ def update_bot(request):
       bearer_token=secrets['bearer_token']
   )
   existing_bounties = set()
-  if os.path.exists('existing_bounties.json'):
-    # Open up existing_bounties.json file and read the contents
-    with open('existing_bounties.json', 'r') as f:
-      existing_bounties = json.load(f)
 
-  print("Existing bounties: ", existing_bounties)
-  existing_bounties = set(existing_bounties)
+  # URL of the website containing bounties
+  url = "https://bountylist.org"
 
-# URL of the website containing bounties
-  url = "https://bountylist.org"  # Replace 'URL_OF_THE_WEBSITE' with the actual URL
-
-# Extract bounties from the URL
+  # Extract bounties from the URL
   bounties = extract_bounties(url, existing_bounties)
 
-# Print the extracted bounties
+  # Print the extracted bounties
   if bounties:
+      num_tweets = 0
       for bounty in bounties:
+
+          # Important: The bot doesn't tweet out more than 5 bounties at a time.
+          # This is a measure to prevent spam and also keep the flow of potsts more constant
+          # Bottom line: This doesn't rlly affect user experience since the bot refreshes every few minutes anyway
+          if num_tweets >= 5:
+            return "Finished tweeting some bounties"
+
           ''' This commented-out code might be useful for debugging
           print("Title:", bounty['title'])
           print("Description:", bounty['description'])
@@ -98,33 +126,36 @@ def update_bot(request):
           print("-" * 50)
           '''
 
+          # Important formatting quirk: links cannot appear at the end of Tweets, 
+          # otherwise they will mysteriously disappear 
           tweet_text = f"Attention all aspiring computer hackers: a new {bounty['reward']} listing has been posted on BountyList!\n\n"
           tweet_text += f"Title: {bounty['title']}\n"
           tweet_text += f"URL: {url+bounty['more_url']}\n"
           tweet_text += f"Time Left: {bounty['status']}"
-          # Important formatting quirk: you need an exclamation point because otherwise the link will not appear in the tweet, 
-          # because twitter will try to "merge" it into the link preview that appears below the Tweet
 
           if len(tweet_text) > 240:
             tweet_text = tweet_text[0:240]
 
           print("New bounty detected. Sending out the following tweet:")
+          print("-" * 50)
           print(tweet_text)
+          print("-" * 50)
 
           try:
+            write_string_to_firestore(bounty['title'])
             client.create_tweet(text=tweet_text)
+            num_tweets += 1
           except Exception as e:
             print("Error sending tweet: ", e)
+            return "Error sending tweet: " + str(e)
 
       # Save list of bounty names into a json file
       # Dump JUST the title attributes
       # This prevents the bot from printing out the same bounty multiple times
-      with open('existing_bounties.json', 'w') as f:
-        for i in bounties:
-          existing_bounties.add(i['title'])
-        json.dump(list(existing_bounties), f)
+      return str(num_tweets) + " new bounties found! Site has been updated accordingly."
   else:
       print("No new bounties found.")
+      return "No new bounties to show."
 
 if __name__ == "__main__":
-  update_bot(None) # The "request" parameter is not important
+  update_bot(None) # The "request" parameter is not important, but maybe useful for future features
