@@ -1,13 +1,3 @@
-# How to use the BountyList Twitter Bot
-
-Create a file called secrets.json and include the following information:
-```
-{
-      "consumer_key": ""
-      "consumer_secret": "",
-      "access_token": "",
-      "access_token_secret": "",
-      "bearer_token": ""
-}
-```
-Fill in the entries with your personal Twitter developer API key / access key / etc. If you don't have any of these, you can generate them by going to https://developer.twitter.com/en/portal/dashboard and creating a new project.
+# How the Bountylist Twitter Bot Works
+The `bot.py` file is placed into a Google Cloud function. Whenever a user makes a request to the function's URL, the Cloud Function calls the `update_bot` method. `update_bot` scrapes the bountylist website and uses Tweepy to post the latest bounties to the Twitter account.
+Note that this code assumes you have configured the environment variables `consumer_key`, `consumer_secret`, `access_token`, `access_token_secret`, and `bearer_token` appropriately in your Google Cloud function / AWS Lambda / whatever. (AWS Lambda is not recommended for Twitter bots because the installation process is a little trickier.)
