@@ -111,10 +111,9 @@ def update_bot(request):
       num_tweets = 0
       for bounty in bounties:
 
-          # Important: The bot doesn't tweet out more than 5 bounties at a time.
-          # This is a measure to prevent spam and also keep the flow of potsts more constant
-          # Bottom line: This doesn't rlly affect user experience since the bot refreshes every few minutes anyway
-          if num_tweets >= 5:
+          # Important: The bot doesn't tweet out more than 20 bounties at a time.
+          # This should help prevent spam
+          if num_tweets >= 20:
             return "Finished tweeting some bounties"
 
           ''' This commented-out code might be useful for debugging
@@ -142,12 +141,12 @@ def update_bot(request):
           print("-" * 50)
 
           try:
-            write_string_to_firestore(bounty['title'])
             client.create_tweet(text=tweet_text)
-            num_tweets += 1
           except Exception as e:
             print("Error sending tweet: ", e)
             return "Error sending tweet: " + str(e)
+          write_string_to_firestore(bounty['title'])
+          num_tweets += 1
 
       # Save list of bounty names into a json file
       # Dump JUST the title attributes
@@ -157,5 +156,3 @@ def update_bot(request):
       print("No new bounties found.")
       return "No new bounties to show."
 
-if __name__ == "__main__":
-  update_bot(None) # The "request" parameter is not important, but maybe useful for future features
